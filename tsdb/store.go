@@ -773,7 +773,45 @@ func (s *Store) deleteSeries(database string, seriesKeys []string, min, max int6
 
 // ExpandSources expands sources against all local shards.
 func (s *Store) ExpandSources(sources influxql.Sources) (influxql.Sources, error) {
-	return s.IteratorCreators().ExpandSources(sources)
+	m := make(map[string]influxql.Source)
+
+	if err := func() error {
+		s.mu.RLock()
+		defer s.mu.RUnlock()
+
+		for _, sh := range s.shards {
+			expanded, err := sh.ExpandSources(sources)
+			if err != nil {
+				return err
+			}
+
+			for _, src := range expanded {
+				switch src := src.(type) {
+				case *influxql.Measurement:
+					m[src.String()] = src
+				default:
+					return fmt.Errorf("Store.ExpandSources: unsupported source type: %T", src)
+				}
+			}
+		}
+		return nil
+	}(); err != nil {
+		return nil, err
+	}
+
+	// Convert set to sorted slice.
+	names := make([]string, 0, len(m))
+	for name := range m {
+		names = append(names, name)
+	}
+	sort.Strings(names)
+
+	// Convert set to a list of Sources.
+	sorted := make(influxql.Sources, 0, len(m))
+	for _, name := range names {
+		sorted = append(sorted, m[name])
+	}
+	return sorted, nil
 }
 
 // IteratorCreators returns a set of all local shards as iterator creators.

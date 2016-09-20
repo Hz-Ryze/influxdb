@@ -561,6 +561,106 @@ func (itr *floatLimitIterator) Next() (*FloatPoint, error) {
 	}
 }
 
+// floatLazyIterator iterates serially over a list of IteratorCreators
+// and reads the created iterator from each one.
+type floatLazyIterator struct {
+	input FloatIterator
+	ics   IteratorCreators
+	opt   IteratorOptions
+	mu    sync.Mutex
+}
+
+// newFloatLazyIterator creates a new instance of floatLazyIterator.
+func newFloatLazyIterator(input FloatIterator, ics IteratorCreators, opt IteratorOptions) *floatLazyIterator {
+	return &floatLazyIterator{
+		input: input,
+		ics:   ics,
+		opt:   opt,
+	}
+}
+
+// Next
+func (itr *floatLazyIterator) Next() (*FloatPoint, error) {
+	for {
+		input := itr.input
+		if input == nil {
+			return nil, nil
+		}
+
+		p, err := input.Next()
+		if err != nil {
+			return nil, err
+		} else if p == nil {
+			// End of an iterator. Lock so we can move to the next iterator.
+			if ok, err := itr.advance(); !ok {
+				return nil, err
+			}
+			continue
+		}
+		return p, err
+	}
+}
+
+func (itr *floatLazyIterator) Stats() IteratorStats {
+	// TODO: Implement iterator stats for the lazy iterator.
+	return IteratorStats{}
+}
+
+func (itr *floatLazyIterator) Close() (err error) {
+	itr.mu.Lock()
+	defer itr.mu.Unlock()
+
+	if itr.input != nil {
+		err = itr.input.Close()
+		itr.input = nil
+	}
+	itr.ics = nil
+	return err
+}
+
+// advance creates the next Iterator from the list of IteratorCreators.
+// It continues to try creating an iterator until it gets a non-nil iterator
+// of the correct type or until there are no more IteratorCreators left.
+// If a new Iterator was created, this returns true. If an error happened while
+// creating any Iterator, false and the error are returned.
+func (itr *floatLazyIterator) advance() (bool, error) {
+	itr.mu.Lock()
+	defer itr.mu.Unlock()
+
+	for {
+		// If there are no more iterator creators, tell the main loop
+		// we did not advance further and there were no errors.
+		if len(itr.ics) == 0 {
+			return false, nil
+		}
+
+		// Attempt to create the iterator.
+		input, err := itr.ics[0].CreateIterator(itr.opt)
+		if err != nil {
+			// An error occurred creating the iterator. Report it.
+			return false, err
+		}
+
+		// Set the current iterator creator to nil since we no longer are using it. That way
+		// the garbage collector can free that memory. Then advance the slice.
+		itr.ics[0] = nil
+		itr.ics = itr.ics[1:]
+
+		if input == nil {
+			continue
+		}
+
+		var ok bool
+		itr.input, ok = input.(FloatIterator)
+		if !ok {
+			// The returned iterator is not the type we are looking for.
+			// Discard and try to create a new one.
+			continue
+		}
+		return true, nil
+	}
+}
+
 type floatFillIterator struct {
 	input     *bufFloatIterator
 	prev      FloatPoint
@@ -689,6 +789,7 @@ func (itr *floatFillIterator) Next() (*FloatPoint, error) {
 			} else {
 				p.Nil = true
 			}
+
 		case NullFill:
 			p.Nil = true
 		case NumberFill:
@@ -2646,6 +2747,106 @@ func (itr *integerLimitIterator) Next() (*IntegerPoint, error) {
 	}
 }
 
+// integerLazyIterator iterates serially over a list of IteratorCreators
+// and reads the created iterator from each one.
+type integerLazyIterator struct {
+	input IntegerIterator
+	ics   IteratorCreators
+	opt   IteratorOptions
+	mu    sync.Mutex
+}
+
+// newIntegerLazyIterator creates a new instance of integerLazyIterator.
+func newIntegerLazyIterator(input IntegerIterator, ics IteratorCreators, opt IteratorOptions) *integerLazyIterator {
+	return &integerLazyIterator{
+		input: input,
+		ics:   ics,
+		opt:   opt,
+	}
+}
+
+// Next
+func (itr *integerLazyIterator) Next() (*IntegerPoint, error) {
+	for {
+		input := itr.input
+		if input == nil {
+			return nil, nil
+		}
+
+		p, err := input.Next()
+		if err != nil {
+			return nil, err
+		} else if p == nil {
+			// End of an iterator. Lock so we can move to the next iterator.
+			if ok, err := itr.advance(); !ok {
+				return nil, err
+			}
+			continue
+		}
+		return p, err
+	}
+}
+
+func (itr *integerLazyIterator) Stats() IteratorStats {
+	// TODO: Implement iterator stats for the lazy iterator.
+	return IteratorStats{}
+}
+
+func (itr *integerLazyIterator) Close() (err error) {
+	itr.mu.Lock()
+	defer itr.mu.Unlock()
+
+	if itr.input != nil {
+		err = itr.input.Close()
+		itr.input = nil
+	}
+	itr.ics = nil
+	return err
+}
+
+// advance creates the next Iterator from the list of IteratorCreators.
+// It continues to try creating an iterator until it gets a non-nil iterator
+// of the correct type or until there are no more IteratorCreators left.
+// If a new Iterator was created, this returns true. If an error happened while
+// creating any Iterator, false and the error are returned.
+func (itr *integerLazyIterator) advance() (bool, error) {
+	itr.mu.Lock()
+	defer itr.mu.Unlock()
+
+	for {
+		// If there are no more iterator creators, tell the main loop
+		// we did not advance further and there were no errors.
+		if len(itr.ics) == 0 {
+			return false, nil
+		}
+
+		// Attempt to create the iterator.
+		input, err := itr.ics[0].CreateIterator(itr.opt)
+		if err != nil {
+			// An error occurred creating the iterator. Report it.
+			return false, err
+		}
+
+		// Set the current iterator creator to nil since we no longer are using it. That way
+		// the garbage collector can free that memory. Then advance the slice.
+		itr.ics[0] = nil
+		itr.ics = itr.ics[1:]
+
+		if input == nil {
+			continue
+		}
+
+		var ok bool
+		itr.input, ok = input.(IntegerIterator)
+		if !ok {
+			// The returned iterator is not the type we are looking for.
+			// Discard and try to create a new one.
+			continue
+		}
+		return true, nil
+	}
+}
+
 type integerFillIterator struct {
 	input     *bufIntegerIterator
 	prev      IntegerPoint
@@ -2774,6 +2975,7 @@ func (itr *integerFillIterator) Next() (*IntegerPoint, error) {
 			} else {
 				p.Nil = true
 			}
+
 		case NullFill:
 			p.Nil = true
 		case NumberFill:
@@ -4725,6 +4927,106 @@ func (itr *stringLimitIterator) Next() (*StringPoint, error) {
 		}
 
 		return p, nil
+	}
+}
+
+// stringLazyIterator iterates serially over a list of IteratorCreators
+// and reads the created iterator from each one.
+type stringLazyIterator struct {
+	input StringIterator
+	ics   IteratorCreators
+	opt   IteratorOptions
+	mu    sync.Mutex
+}
+
+// newStringLazyIterator creates a new instance of stringLazyIterator.
+func newStringLazyIterator(input StringIterator, ics IteratorCreators, opt IteratorOptions) *stringLazyIterator {
+	return &stringLazyIterator{
+		input: input,
+		ics:   ics,
+		opt:   opt,
+	}
+}
+
+// Next
+func (itr *stringLazyIterator) Next() (*StringPoint, error) {
+	for {
+		input := itr.input
+		if input == nil {
+			return nil, nil
+		}
+
+		p, err := input.Next()
+		if err != nil {
+			return nil, err
+		} else if p == nil {
+			// End of an iterator. Lock so we can move to the next iterator.
+			if ok, err := itr.advance(); !ok {
+				return nil, err
+			}
+			continue
+		}
+		return p, err
+	}
+}
+
+func (itr *stringLazyIterator) Stats() IteratorStats {
+	// TODO: Implement iterator stats for the lazy iterator.
+	return IteratorStats{}
+}
+
+func (itr *stringLazyIterator) Close() (err error) {
+	itr.mu.Lock()
+	defer itr.mu.Unlock()
+
+	if itr.input != nil {
+		err = itr.input.Close()
+		itr.input = nil
+	}
+	itr.ics = nil
+	return err
+}
+
+// advance creates the next Iterator from the list of IteratorCreators.
+// It continues to try creating an iterator until it gets a non-nil iterator
+// of the correct type or until there are no more IteratorCreators left.
+// If a new Iterator was created, this returns true. If an error happened while
+// creating any Iterator, false and the error are returned.
+func (itr *stringLazyIterator) advance() (bool, error) {
+	itr.mu.Lock()
+	defer itr.mu.Unlock()
+
+	for {
+		// If there are no more iterator creators, tell the main loop
+		// we did not advance further and there were no errors.
+		if len(itr.ics) == 0 {
+			return false, nil
+		}
+
+		// Attempt to create the iterator.
+		input, err := itr.ics[0].CreateIterator(itr.opt)
+		if err != nil {
+			// An error occurred creating the iterator. Report it.
+			return false, err
+		}
+
+		// Set the current iterator creator to nil since we no longer are using it. That way
+		// the garbage collector can free that memory. Then advance the slice.
+		itr.ics[0] = nil
+		itr.ics = itr.ics[1:]
+
+		if input == nil {
+			continue
+		}
+
+		var ok bool
+		itr.input, ok = input.(StringIterator)
+		if !ok {
+			// The returned iterator is not the type we are looking for.
+			// Discard and try to create a new one.
+			continue
+		}
+		return true, nil
 	}
 }
 
@@ -6793,6 +7095,106 @@ func (itr *booleanLimitIterator) Next() (*BooleanPoint, error) {
 		}
 
 		return p, nil
+	}
+}
+
+// booleanLazyIterator iterates serially over a list of IteratorCreators
+// and reads the created iterator from each one.
+type booleanLazyIterator struct {
+	input BooleanIterator
+	ics   IteratorCreators
+	opt   IteratorOptions
+	mu    sync.Mutex
+}
+
+// newBooleanLazyIterator creates a new instance of booleanLazyIterator.
+func newBooleanLazyIterator(input BooleanIterator, ics IteratorCreators, opt IteratorOptions) *booleanLazyIterator {
+	return &booleanLazyIterator{
+		input: input,
+		ics:   ics,
+		opt:   opt,
+	}
+}
+
+// Next
+func (itr *booleanLazyIterator) Next() (*BooleanPoint, error) {
+	for {
+		input := itr.input
+		if input == nil {
+			return nil, nil
+		}
+
+		p, err := input.Next()
+		if err != nil {
+			return nil, err
+		} else if p == nil {
+			// End of an iterator. Lock so we can move to the next iterator.
+			if ok, err := itr.advance(); !ok {
+				return nil, err
+			}
+			continue
+		}
+		return p, err
+	}
+}
+
+func (itr *booleanLazyIterator) Stats() IteratorStats {
+	// TODO: Implement iterator stats for the lazy iterator.
+	return IteratorStats{}
+}
+
+func (itr *booleanLazyIterator) Close() (err error) {
+	itr.mu.Lock()
+	defer itr.mu.Unlock()
+
+	if itr.input != nil {
+		err = itr.input.Close()
+		itr.input = nil
+	}
+	itr.ics = nil
+	return err
+}
+
+// advance creates the next Iterator from the list of IteratorCreators.
+// It continues to try creating an iterator until it gets a non-nil iterator
+// of the correct type or until there are no more IteratorCreators left.
+// If a new Iterator was created, this returns true. If an error happened while
+// creating any Iterator, false and the error are returned.
+func (itr *booleanLazyIterator) advance() (bool, error) {
+	itr.mu.Lock()
+	defer itr.mu.Unlock()
+
+	for {
+		// If there are no more iterator creators, tell the main loop
+		// we did not advance further and there were no errors.
+		if len(itr.ics) == 0 {
+			return false, nil
+		}
+
+		// Attempt to create the iterator.
+		input, err := itr.ics[0].CreateIterator(itr.opt)
+		if err != nil {
+			// An error occurred creating the iterator. Report it.
+			return false, err
+		}
+
+		// Set the current iterator creator to nil since we no longer are using it. That way
+		// the garbage collector can free that memory. Then advance the slice.
+		itr.ics[0] = nil
+		itr.ics = itr.ics[1:]
+
+		if input == nil {
+			continue
+		}
+
+		var ok bool
+		itr.input, ok = input.(BooleanIterator)
+		if !ok {
+			// The returned iterator is not the type we are looking for.
+			// Discard and try to create a new one.
+			continue
+		}
+		return true, nil
 	}
 }
 

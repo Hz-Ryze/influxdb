@@ -348,6 +348,16 @@ func (a Sources) HasSystemSource() bool {
 	return false
 }
 
+// HasSystemSource returns true if any of the measurement names are internal, system sources.
+func HasSystemSource(measurements []string) bool {
+	for _, measurement := range measurements {
+		if IsSystemName(measurement) {
+			return true
+		}
+	}
+	return false
+}
+
 // HasRegex returns true if any of the sources are regex measurements.
 func (a Sources) HasRegex() bool {
 	for _, s := range a {
@@ -1048,9 +1058,9 @@ func cloneSource(s Source) Source {
 // fields are replaced with the supplied fields, and any wildcard GROUP BY fields are replaced
 // with the supplied dimensions. Any fields with no type specifier are rewritten with the
 // appropriate type.
-func (s *SelectStatement) RewriteFields(ic IteratorCreator) (*SelectStatement, error) {
+func (s *SelectStatement) RewriteFields(mapper FieldMapper) (*SelectStatement, error) {
 	// Retrieve a list of unique field and dimensions.
-	fieldSet, dimensionSet, err := ic.FieldDimensions(s.Sources)
+	fieldSet, dimensionSet, err := mapper.FieldDimensions()
 	if err != nil {
 		return s, err
 	}
@@ -2149,20 +2159,6 @@ func filterExprBySource(name string, expr Expr) Expr {
 	return expr
 }
 
-// MatchSource returns the source name that matches a field name.
-// Returns a blank string if no sources match.
-func MatchSource(sources Sources, name string) string {
-	for _, src := range sources {
-		switch src := src.(type) {
-		case *Measurement:
-			if strings.HasPrefix(name, src.Name) {
-				return src.Name
-			}
-		}
-	}
-	return ""
-}
-
 // Target represents a target (destination) policy, measurement, and DB.
 type Target struct {
 	// Measurement to write into.
@@ -3125,6 +3121,14 @@ func (m *Measurement) String() string {
 	}
 
 	return buf.String()
+}
+
+// DatabaseString returns a string representation of only the database.
+func (m *Measurement) DatabaseString() string {
+	return strings.Join([]string{
+		QuoteIdent(m.Database),
+		QuoteIdent(m.RetentionPolicy),
+	}, ".")
 }
 
 func encodeMeasurement(mm *Measurement) *internal.Measurement {
