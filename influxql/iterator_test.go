@@ -1126,10 +1126,16 @@ func TestIterator_EncodeDecode(t *testing.T) {
 	}
 }
 
+type FieldMapperFn func() (fields map[string]influxql.DataType, dimensions map[string]struct{}, err error)
+
+func (fn FieldMapperFn) FieldDimensions() (fields map[string]influxql.DataType, dimensions map[string]struct{}, err error) {
+	return fn()
+}
+
 // IteratorCreator is a mockable implementation of SelectStatementExecutor.IteratorCreator.
 type IteratorCreator struct {
 	CreateIteratorFn  func(opt influxql.IteratorOptions) (influxql.Iterator, error)
-	FieldDimensionsFn func(sources influxql.Sources) (fields map[string]influxql.DataType, dimensions map[string]struct{}, err error)
+	FieldDimensionsFn func() (fields map[string]influxql.DataType, dimensions map[string]struct{}, err error)
 	ExpandSourcesFn   func(sources influxql.Sources) (influxql.Sources, error)
 }
 
@@ -1137,8 +1143,8 @@ func (ic *IteratorCreator) CreateIterator(opt influxql.IteratorOptions) (influxq
 	return ic.CreateIteratorFn(opt)
 }
 
-func (ic *IteratorCreator) FieldDimensions(sources influxql.Sources) (fields map[string]influxql.DataType, dimensions map[string]struct{}, err error) {
-	return ic.FieldDimensionsFn(sources)
+func (ic *IteratorCreator) FieldDimensions() (fields map[string]influxql.DataType, dimensions map[string]struct{}, err error) {
+	return ic.FieldDimensionsFn()
 }
 
 func (ic *IteratorCreator) ExpandSources(sources influxql.Sources) (influxql.Sources, error) {
