@@ -629,11 +629,7 @@ func (e *StatementExecutor) mapShards(stmt *influxql.SelectStatement, opt *influ
 			for _, sh := range shards {
 				var measurements []string
 				if s.Regex != nil {
-					mms := sh.Shard.MeasurementsByRegex(s.Regex.Val)
-					measurements = make([]string, 0, len(mms))
-					for _, m := range mms {
-						measurements = append(measurements, m.Name)
-					}
+					measurements = sh.Shard.MeasurementsByRegex(s.Regex.Val)
 				} else {
 					measurements = []string{s.Name}
 				}
@@ -1182,7 +1178,7 @@ type TSDBStore interface {
 	DeleteShard(id uint64) error
 	IteratorCreator(shards []meta.ShardInfo, opt *influxql.SelectOptions) (influxql.IteratorCreator, error)
 
-	Shard(id uint64) *tsdb.Shard
+	Shard(id uint64) Shard
 	Measurements(database string, cond influxql.Expr) ([]string, error)
 	TagValues(database string, cond influxql.Expr) ([]tsdb.TagValues, error)
 }
@@ -1197,6 +1193,14 @@ func (s LocalTSDBStore) IteratorCreator(shards []meta.ShardInfo, opt *influxql.S
 		shardIDs[i] = sh.ID
 	}
 	return s.Store.IteratorCreator(shardIDs, opt)
+}
+
+func (s LocalTSDBStore) Shard(id uint64) Shard {
+	shard := s.Store.Shard(id)
+	if shard == nil {
+		return nil
+	}
+	return localShard{Shard: shard}
 }
 
 // ShardIteratorCreator is an interface for creating an IteratorCreator to access a specific shard.

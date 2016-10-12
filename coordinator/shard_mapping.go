@@ -1,14 +1,12 @@
 package coordinator
 
 import (
-	"fmt"
 	"runtime"
 	"sort"
 	"sync"
 	"time"
 
 	"github.com/influxdata/influxdb/influxql"
-	"github.com/influxdata/influxdb/tsdb"
 )
 
 type Source struct {
@@ -17,7 +15,7 @@ type Source struct {
 }
 
 type ShardInfo struct {
-	*tsdb.Shard
+	Shard        Shard
 	Measurements []string
 	StartTime    time.Time
 }
@@ -30,7 +28,7 @@ func (a ShardMapper) FieldDimensions() (fields map[string]influxql.DataType, dim
 
 	for _, shards := range a {
 		for _, sh := range shards {
-			f, d, err := sh.FieldDimensions(sh.Measurements)
+			f, d, err := sh.Shard.FieldDimensions(sh.Measurements)
 			if err != nil {
 				return nil, nil, err
 			}
@@ -53,7 +51,7 @@ func (a ShardMapper) CreateIterator(opt influxql.IteratorOptions) (influxql.Iter
 		var shards []influxql.IteratorCreator
 		for _, group := range a {
 			for _, sh := range group {
-				shards = append(shards, sh)
+				shards = append(shards, sh.Shard)
 			}
 		}
 		return influxql.NewLazyIterator(shards, opt)
@@ -152,8 +150,8 @@ func (a ShardMapper) CreateIterator(opt influxql.IteratorOptions) (influxql.Iter
 }
 
 type SeriesInfo struct {
-	*tsdb.Shard
-	Measurement *tsdb.Measurement
+	Shard       Shard
+	Measurement string
 	SeriesKey   []byte
 	TagSet      *influxql.TagSet
 	StartTime   time.Time
@@ -161,10 +159,6 @@ type SeriesInfo struct {
 
 func (si *SeriesInfo) CreateIterator(opt influxql.IteratorOptions) (influxql.Iterator, error) {
 	return si.Shard.CreateSeriesIterator(si.Measurement, si.TagSet, opt)
-}
-
-func (si *SeriesInfo) String() string {
-	return fmt.Sprintf("{measurement: %s, series key: %s, tag sets: %d}", si.Measurement.Name, string(si.SeriesKey), len(si.TagSet.SeriesKeys))
 }
 
 type byTime []*SeriesInfo
@@ -211,14 +205,9 @@ func marshalTags(tags map[string]string) []byte {
 }
 
 func createTagSets(si *ShardInfo, name string, opt *influxql.IteratorOptions) ([]*SeriesInfo, error) {
-	mm := si.Shard.MeasurementByName(name)
-	if mm == nil {
-		return nil, nil
-	}
-
 	// Determine tagsets for this measurement based on dimensions and filters.
-	tagSets, err := mm.TagSets(opt.Dimensions, opt.Condition)
-	if err != nil {
+	tagSets, err := si.Shard.TagSets(name, opt.Dimensions, opt.Condition)
+	if tagSets == nil || err != nil {
 		return nil, err
 	}
 
@@ -233,7 +222,7 @@ func createTagSets(si *ShardInfo, name string, opt *influxql.IteratorOptions) ([
 	for _, t := range tagSets {
 		series = append(series, &SeriesInfo{
 			Shard:       si.Shard,
-			Measurement: mm,
+			Measurement: name,
 			SeriesKey:   marshalTags(t.Tags),
 			TagSet:      t,
 			StartTime:   si.StartTime,
