@@ -604,7 +604,7 @@ func (itr *{{$k.name}}LazyIterator) Stats() IteratorStats {
 	stats := itr.stats
 	itr.mu.RLock()
 	if itr.input != nil {
-		stats = stats.Add(itr.input.Stats())
+		stats.Add(itr.input.Stats())
 	}
 	itr.mu.RUnlock()
 	return stats
@@ -639,7 +639,7 @@ func (itr *{{$k.name}}LazyIterator) advance() (bool, error) {
 		}
 
 		// Attempt to create the iterator.
-		itr, err := itr.ics[0].CreateIterator(itr.opt)
+		i, err := itr.ics[0].CreateIterator(itr.opt)
 		if err != nil {
 			// An error occurred creating the iterator. Report it.
 			return false, err
@@ -650,11 +650,11 @@ func (itr *{{$k.name}}LazyIterator) advance() (bool, error) {
 		itr.ics[0] = nil
 		itr.ics = itr.ics[1:]
 
-		if itr == nil {
+		if i == nil {
 			continue
 		}
 
-		input, ok := itr.({{$k.Name}}Iterator)
+		input, ok := i.({{$k.Name}}Iterator)
 		if !ok {
 			// The returned iterator is not the type we are looking for.
 			// Discard and try to create a new one.
@@ -662,7 +662,7 @@ func (itr *{{$k.name}}LazyIterator) advance() (bool, error) {
 		}
 
 		// Record the final stats from the iterator and add them to our own for later recordkeeping.
-		itr.stats = itr.stats.Add(input.Stats())
+		itr.stats.Add(input.Stats())
 		itr.input = input
 		return true, nil
 	}

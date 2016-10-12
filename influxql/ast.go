@@ -3123,14 +3123,6 @@ func (m *Measurement) String() string {
 	return buf.String()
 }
 
-// DatabaseString returns a string representation of only the database.
-func (m *Measurement) DatabaseString() string {
-	return strings.Join([]string{
-		QuoteIdent(m.Database),
-		QuoteIdent(m.RetentionPolicy),
-	}, ".")
-}
-
 func encodeMeasurement(mm *Measurement) *internal.Measurement {
 	pb := &internal.Measurement{
 		Database:        proto.String(mm.Database),

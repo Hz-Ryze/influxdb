@@ -567,7 +567,8 @@ type floatLazyIterator struct {
 	input FloatIterator
 	ics   IteratorCreators
 	opt   IteratorOptions
-	mu    sync.Mutex
+	stats IteratorStats
+	mu    sync.RWMutex
 }
 
 // newFloatLazyIterator creates a new instance of floatLazyIterator.
@@ -602,8 +603,13 @@ func (itr *floatLazyIterator) Next() (*FloatPoint, error) {
 }
 
 func (itr *floatLazyIterator) Stats() IteratorStats {
-	// TODO: Implement iterator stats for the lazy iterator.
-	return IteratorStats{}
+	stats := itr.stats
+	itr.mu.RLock()
+	if itr.input != nil {
+		stats.Add(itr.input.Stats())
+	}
+	itr.mu.RUnlock()
+	return stats
 }
 
 func (itr *floatLazyIterator) Close() (err error) {
@@ -635,7 +641,7 @@ func (itr *floatLazyIterator) advance() (bool, error) {
 		}
 
 		// Attempt to create the iterator.
-		input, err := itr.ics[0].CreateIterator(itr.opt)
+		i, err := itr.ics[0].CreateIterator(itr.opt)
 		if err != nil {
 			// An error occurred creating the iterator. Report it.
 			return false, err
@@ -646,17 +652,20 @@ func (itr *floatLazyIterator) advance() (bool, error) {
 		itr.ics[0] = nil
 		itr.ics = itr.ics[1:]
 
-		if input == nil {
+		if i == nil {
 			continue
 		}
 
-		var ok bool
-		itr.input, ok = input.(FloatIterator)
+		input, ok := i.(FloatIterator)
 		if !ok {
 			// The returned iterator is not the type we are looking for.
 			// Discard and try to create a new one.
 			continue
 		}
+
+		// Record the final stats from the iterator and add them to our own for later recordkeeping.
+		itr.stats.Add(input.Stats())
+		itr.input = input
 		return true, nil
 	}
 }
@@ -2753,7 +2762,8 @@ type integerLazyIterator struct {
 	input IntegerIterator
 	ics   IteratorCreators
 	opt   IteratorOptions
-	mu    sync.Mutex
+	stats IteratorStats
+	mu    sync.RWMutex
 }
 
 // newIntegerLazyIterator creates a new instance of integerLazyIterator.
@@ -2788,8 +2798,13 @@ func (itr *integerLazyIterator) Next() (*IntegerPoint, error) {
 }
 
 func (itr *integerLazyIterator) Stats() IteratorStats {
-	// TODO: Implement iterator stats for the lazy iterator.
-	return IteratorStats{}
+	stats := itr.stats
+	itr.mu.RLock()
+	if itr.input != nil {
+		stats.Add(itr.input.Stats())
+	}
+	itr.mu.RUnlock()
+	return stats
 }
 
 func (itr *integerLazyIterator) Close() (err error) {
@@ -2821,7 +2836,7 @@ func (itr *integerLazyIterator) advance() (bool, error) {
 		}
 
 		// Attempt to create the iterator.
-		input, err := itr.ics[0].CreateIterator(itr.opt)
+		i, err := itr.ics[0].CreateIterator(itr.opt)
 		if err != nil {
 			// An error occurred creating the iterator. Report it.
 			return false, err
@@ -2832,17 +2847,20 @@ func (itr *integerLazyIterator) advance() (bool, error) {
 		itr.ics[0] = nil
 		itr.ics = itr.ics[1:]
 
-		if input == nil {
+		if i == nil {
 			continue
 		}
 
-		var ok bool
-		itr.input, ok = input.(IntegerIterator)
+		input, ok := i.(IntegerIterator)
 		if !ok {
 			// The returned iterator is not the type we are looking for.
 			// Discard and try to create a new one.
 			continue
 		}
+
+		// Record the final stats from the iterator and add them to our own for later recordkeeping.
+		itr.stats.Add(input.Stats())
+		itr.input = input
 		return true, nil
 	}
 }
@@ -4936,7 +4954,8 @@ type stringLazyIterator struct {
 	input StringIterator
 	ics   IteratorCreators
 	opt   IteratorOptions
-	mu    sync.Mutex
+	stats IteratorStats
+	mu    sync.RWMutex
 }
 
 // newStringLazyIterator creates a new instance of stringLazyIterator.
@@ -4971,8 +4990,13 @@ func (itr *stringLazyIterator) Next() (*StringPoint, error) {
 }
 
 func (itr *stringLazyIterator) Stats() IteratorStats {
-	// TODO: Implement iterator stats for the lazy iterator.
-	return IteratorStats{}
+	stats := itr.stats
+	itr.mu.RLock()
+	if itr.input != nil {
+		stats.Add(itr.input.Stats())
+	}
+	itr.mu.RUnlock()
+	return stats
 }
 
 func (itr *stringLazyIterator) Close() (err error) {
@@ -5004,7 +5028,7 @@ func (itr *stringLazyIterator) advance() (bool, error) {
 		}
 
 		// Attempt to create the iterator.
-		input, err := itr.ics[0].CreateIterator(itr.opt)
+		i, err := itr.ics[0].CreateIterator(itr.opt)
 		if err != nil {
 			// An error occurred creating the iterator. Report it.
 			return false, err
@@ -5015,17 +5039,20 @@ func (itr *stringLazyIterator) advance() (bool, error) {
 		itr.ics[0] = nil
 		itr.ics = itr.ics[1:]
 
-		if input == nil {
+		if i == nil {
 			continue
 		}
 
-		var ok bool
-		itr.input, ok = input.(StringIterator)
+		input, ok := i.(StringIterator)
 		if !ok {
 			// The returned iterator is not the type we are looking for.
 			// Discard and try to create a new one.
 			continue
 		}
+
+		// Record the final stats from the iterator and add them to our own for later recordkeeping.
+		itr.stats.Add(input.Stats())
+		itr.input = input
 		return true, nil
 	}
 }
@@ -7104,7 +7131,8 @@ type booleanLazyIterator struct {
 	input BooleanIterator
 	ics   IteratorCreators
 	opt   IteratorOptions
-	mu    sync.Mutex
+	stats IteratorStats
+	mu    sync.RWMutex
 }
 
 // newBooleanLazyIterator creates a new instance of booleanLazyIterator.
@@ -7139,8 +7167,13 @@ func (itr *booleanLazyIterator) Next() (*BooleanPoint, error) {
 }
 
 func (itr *booleanLazyIterator) Stats() IteratorStats {
-	// TODO: Implement iterator stats for the lazy iterator.
-	return IteratorStats{}
+	stats := itr.stats
+	itr.mu.RLock()
+	if itr.input != nil {
+		stats.Add(itr.input.Stats())
+	}
+	itr.mu.RUnlock()
+	return stats
 }
 
 func (itr *booleanLazyIterator) Close() (err error) {
@@ -7172,7 +7205,7 @@ func (itr *booleanLazyIterator) advance() (bool, error) {
 		}
 
 		// Attempt to create the iterator.
-		input, err := itr.ics[0].CreateIterator(itr.opt)
+		i, err := itr.ics[0].CreateIterator(itr.opt)
 		if err != nil {
 			// An error occurred creating the iterator. Report it.
 			return false, err
@@ -7183,17 +7216,20 @@ func (itr *booleanLazyIterator) advance() (bool, error) {
 		itr.ics[0] = nil
 		itr.ics = itr.ics[1:]
 
-		if input == nil {
+		if i == nil {
 			continue
 		}
 
-		var ok bool
-		itr.input, ok = input.(BooleanIterator)
+		input, ok := i.(BooleanIterator)
 		if !ok {
 			// The returned iterator is not the type we are looking for.
 			// Discard and try to create a new one.
 			continue
 		}
+
+		// Record the final stats from the iterator and add them to our own for later recordkeeping.
+		itr.stats.Add(input.Stats())
+		itr.input = input
 		return true, nil
 	}
 }
